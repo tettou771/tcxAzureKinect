@@ -32,24 +32,30 @@ if (cam->isFrameNew()) {
 }
 ```
 
-It also exposes the optional streams via capability interfaces:
+Color and IR are part of the canonical `DepthFrame`, so they are read directly
+on the camera (no capability cast needed):
 
 ```cpp
-if (auto* c = as<IColorStream>(*cam))    { c->getColorPixels(); }
-if (auto* ir = as<IInfraredStream>(*cam)) { ir->getInfraredPixels(); }
+if (cam->hasColor())    { const Pixels& c  = cam->getColorPixels(); }
+if (cam->hasInfrared()) { const Pixels& ir = cam->getInfraredPixels(); }
+const DepthFrame& f = cam->currentFrame();   // depth / world / color / ir / intrinsics
 ```
 
 ## Notes
 
+- This backend just **fills the canonical `DepthFrame`** in `captureInto()`; the
+  `tcxDepthCamera` base provides all the accessors, meshing and threading.
 - **Units:** depth distance and world coordinates are in **meters** (the
-  tcxDepthCamera convention), converted from the SDK's millimeters.
+  tcxDepthCamera convention). Depth is stored as uint16 mm with
+  `depthScale = 0.001`.
 - **Color** is delivered already registered into the depth geometry (via
   `k4a_transformation_color_image_to_depth_camera`), so per-vertex color and UVs
   map straight through the depth pixel coordinates. `getColorPixels()` therefore
   returns a depth-resolution image, not the full 720p color frame.
 - **Point cloud** uses the SDK's `depth_image_to_point_cloud` transformation
-  (accurate, accounts for lens distortion), so `getWorldCoordinateAt()` reads
-  the SDK XYZ image rather than re-deprojecting from intrinsics.
+  (accurate, accounts for lens distortion): the result is written to
+  `frame.world`, and the base returns it from `getWorldCoordinateAt()` /
+  `toMesh()` instead of re-deprojecting from intrinsics.
 - **IR** is the active-brightness image, stored as a 1-channel F32 `Pixels`
   (read via `getDataF32()`).
 - Sensor type reports `DepthSensorType::ToF`.

@@ -2,11 +2,10 @@
 // tcxAzureKinect.cpp - Azure Kinect DK backend implementation (k4a)
 // =============================================================================
 //
-// NOTE: This is a first pass written against the k4a API. It has NOT yet been
-// compiled or run against the SDK / hardware (developed on macOS, which k4a
-// does not support). Expect to refine the SDK wiring when first building on
-// Linux with the Azure Kinect Sensor SDK installed. The tcxDepthCamera /
-// ThreadedDepthCameraBase plumbing it relies on is the validated part.
+// NOTE: First pass written against the k4a API; NOT yet compiled or run against
+// the SDK / hardware (developed on macOS, which k4a does not support). Build /
+// refine on Linux with the Azure Kinect Sensor SDK installed. The tcxDepthCamera
+// plumbing it fills is the validated part.
 //
 // =============================================================================
 
@@ -18,8 +17,7 @@ using namespace std;
 
 namespace tcx {
 
-// How long captureInto() waits for a synchronized capture before giving up and
-// letting the worker re-check the running flag (ms).
+// Timeout for a synchronized capture before the worker re-checks running (ms).
 static constexpr int32_t kCaptureTimeoutMs = 1000;
 
 struct AzureKinect::Impl {
@@ -34,8 +32,6 @@ AzureKinect::AzureKinect(uint32_t deviceIndex)
 
 AzureKinect::~AzureKinect() = default;
 
-// -----------------------------------------------------------------------------
-// Lifecycle
 // -----------------------------------------------------------------------------
 bool AzureKinect::openDevice() {
     if (k4a_device_open(deviceIndex_, &impl_->device) != K4A_RESULT_SUCCEEDED) {
@@ -67,21 +63,14 @@ bool AzureKinect::openDevice() {
 
     impl_->transformation = k4a_transformation_create(&impl_->calibration);
 
-    // Cache depth intrinsics (pinhole + Brown-Conrady) for getDepthIntrinsics().
     const k4a_calibration_camera_t& dc = impl_->calibration.depth_camera_calibration;
-    const k4a_calibration_intrinsic_parameters_t::_param& p =
-        dc.intrinsics.parameters.param;
+    const auto& p = dc.intrinsics.parameters.param;
     depthIntrinsics_.width  = dc.resolution_width;
     depthIntrinsics_.height = dc.resolution_height;
-    depthIntrinsics_.fx = p.fx;
-    depthIntrinsics_.fy = p.fy;
-    depthIntrinsics_.cx = p.cx;
-    depthIntrinsics_.cy = p.cy;
-    depthIntrinsics_.k1 = p.k1;
-    depthIntrinsics_.k2 = p.k2;
-    depthIntrinsics_.k3 = p.k3;
-    depthIntrinsics_.p1 = p.p1;
-    depthIntrinsics_.p2 = p.p2;
+    depthIntrinsics_.fx = p.fx; depthIntrinsics_.fy = p.fy;
+    depthIntrinsics_.cx = p.cx; depthIntrinsics_.cy = p.cy;
+    depthIntrinsics_.k1 = p.k1; depthIntrinsics_.k2 = p.k2; depthIntrinsics_.k3 = p.k3;
+    depthIntrinsics_.p1 = p.p1; depthIntrinsics_.p2 = p.p2;
 
     return true;
 }
@@ -99,32 +88,34 @@ void AzureKinect::closeDevice() {
 }
 
 // -----------------------------------------------------------------------------
-// Capture (runs on the background thread in threaded mode)
-// -----------------------------------------------------------------------------
-StreamFreshness AzureKinect::captureInto(AzureKinectFrame& dst) {
+StreamFreshness AzureKinect::captureInto(DepthFrame& dst) {
     StreamFreshness fresh;
 
     k4a_capture_t cap = nullptr;
-    k4a_wait_result_t wr =
-        k4a_device_get_capture(impl_->device, &cap, kCaptureTimeoutMs);
-    if (wr != K4A_WAIT_RESULT_SUCCEEDED) {
+    if (k4a_device_get_capture(impl_->device, &cap, kCaptureTimeoutMs)
+            != K4A_WAIT_RESULT_SUCCEEDED) {
         if (cap) k4a_capture_release(cap);
-        return fresh;  // timeout / no frame this round
+        return fresh;  // timeout / no frame
     }
 
     k4a_image_t depthImg = k4a_capture_get_depth_image(cap);
     if (depthImg) {
         const int w = k4a_image_get_width_pixels(depthImg);
         const int h = k4a_image_get_height_pixels(depthImg);
-        dst.depthW = w;
-        dst.depthH = h;
+        dst.w = w;
+        dst.h = h;
+        dst.depthScale = 0.001f;  // k4a depth is uint16 mm
+        dst.intrinsics = depthIntrinsics_;
+        dst.timestamp =
+            k4a_image_get_device_timestamp_usec(depthImg) * 1e-6;
 
         const uint16_t* db =
             reinterpret_cast<const uint16_t*>(k4a_image_get_buffer(depthImg));
         dst.depth.assign(db, db + static_cast<size_t>(w) * h);
         fresh.depth = true;
 
-        // Point cloud (XYZ int16 mm) via the SDK transformation.
+        // SDK point cloud (XYZ int16 mm) -> frame.world (meters). The base will
+        // use this instead of re-deprojecting (accurate, distortion-aware).
         k4a_image_t xyzImg = nullptr;
         if (k4a_image_create(K4A_IMAGE_FORMAT_CUSTOM, w, h,
                              w * 3 * static_cast<int>(sizeof(int16_t)),
@@ -134,13 +125,18 @@ StreamFreshness AzureKinect::captureInto(AzureKinectFrame& dst) {
                     K4A_CALIBRATION_TYPE_DEPTH, xyzImg) == K4A_RESULT_SUCCEEDED) {
                 const int16_t* xb =
                     reinterpret_cast<const int16_t*>(k4a_image_get_buffer(xyzImg));
-                dst.xyz.assign(xb, xb + static_cast<size_t>(w) * h * 3);
+                const size_t n = static_cast<size_t>(w) * h;
+                dst.world.resize(n);
+                for (size_t i = 0; i < n; ++i) {
+                    dst.world[i] = Vec3{xb[i * 3 + 0] * 0.001f,
+                                        xb[i * 3 + 1] * 0.001f,
+                                        xb[i * 3 + 2] * 0.001f};
+                }
             }
             k4a_image_release(xyzImg);
         }
 
-        // Color registered into the depth geometry (so per-vertex color / UVs
-        // map straight through the depth pixel coordinates).
+        // Color registered into the depth geometry.
         k4a_image_t colorImg = k4a_capture_get_color_image(cap);
         if (colorImg) {
             k4a_image_t colorInDepth = nullptr;
@@ -149,7 +145,7 @@ StreamFreshness AzureKinect::captureInto(AzureKinectFrame& dst) {
                 if (k4a_transformation_color_image_to_depth_camera(
                         impl_->transformation, depthImg, colorImg,
                         colorInDepth) == K4A_RESULT_SUCCEEDED) {
-                    dst.color.allocate(w, h, 4);  // RGBA U8
+                    dst.color.allocate(w, h, 4);  // RGBA
                     const uint8_t* cb = k4a_image_get_buffer(colorInDepth);
                     uint8_t* out = dst.color.getData();
                     const size_t n = static_cast<size_t>(w) * h;
@@ -169,7 +165,7 @@ StreamFreshness AzureKinect::captureInto(AzureKinectFrame& dst) {
         k4a_image_release(depthImg);
     }
 
-    // IR / active brightness (same resolution as depth).
+    // IR / active brightness (F32 1-channel, use getDataF32()).
     k4a_image_t irImg = k4a_capture_get_ir_image(cap);
     if (irImg) {
         const int w = k4a_image_get_width_pixels(irImg);
@@ -186,30 +182,6 @@ StreamFreshness AzureKinect::captureInto(AzureKinectFrame& dst) {
 
     k4a_capture_release(cap);
     return fresh;
-}
-
-// -----------------------------------------------------------------------------
-// Per-pixel accessors (read the current front frame; no locking needed)
-// -----------------------------------------------------------------------------
-float AzureKinect::getDistanceAt(int x, int y) const {
-    const AzureKinectFrame& f = front();
-    if (x < 0 || y < 0 || x >= f.depthW || y >= f.depthH) return 0.0f;
-    const size_t i = static_cast<size_t>(y) * f.depthW + x;
-    return i < f.depth.size() ? f.depth[i] * 0.001f : 0.0f;  // mm -> m
-}
-
-Vec3 AzureKinect::getWorldCoordinateAt(int x, int y) const {
-    const AzureKinectFrame& f = front();
-    if (x < 0 || y < 0 || x >= f.depthW || y >= f.depthH) return Vec3{0, 0, 0};
-    const size_t i = (static_cast<size_t>(y) * f.depthW + x) * 3;
-    if (i + 2 >= f.xyz.size()) return Vec3{0, 0, 0};
-    return Vec3{f.xyz[i] * 0.001f, f.xyz[i + 1] * 0.001f, f.xyz[i + 2] * 0.001f};
-}
-
-Vec2 AzureKinect::getColorTexCoordAt(int dx, int dy) const {
-    const AzureKinectFrame& f = front();
-    if (f.depthW <= 0 || f.depthH <= 0) return Vec2{0, 0};
-    return Vec2{(dx + 0.5f) / f.depthW, (dy + 0.5f) / f.depthH};
 }
 
 } // namespace tcx
