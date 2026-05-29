@@ -1,0 +1,31 @@
+# Build artifacts
+build/
+build-*/
+out/
+cmake-build-*/
+*.a
+*.o
+*.d
+*.so
+*.dylib
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.xcodeproj/
+DerivedData/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+_deps/
+.cache/
+
+# Project Generator auto-generated
+**/CMakePresets.json
+**/build-web.*

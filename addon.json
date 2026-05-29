@@ -1,0 +1,19 @@
+{
+  "description": "Azure Kinect DK (k4a) backend for tcxDepthCamera — depth, color, IR, point cloud",
+  "author": "tettou771",
+  "license": "MIT",
+  "category": "hardware",
+  "keywords": [
+    "azurekinect",
+    "kinect",
+    "k4a",
+    "depth",
+    "depthcamera",
+    "pointcloud",
+    "tof",
+    "rgbd"
+  ],
+  "dependencies": [
+    "tcxDepthCamera"
+  ]
+}
