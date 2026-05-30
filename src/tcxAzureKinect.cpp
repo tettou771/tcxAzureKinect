@@ -72,6 +72,28 @@ bool AzureKinect::openDevice() {
     depthIntrinsics_.k1 = p.k1; depthIntrinsics_.k2 = p.k2; depthIntrinsics_.k3 = p.k3;
     depthIntrinsics_.p1 = p.p1; depthIntrinsics_.p2 = p.p2;
 
+    // Color camera intrinsics (native color resolution).
+    const k4a_calibration_camera_t& cc = impl_->calibration.color_camera_calibration;
+    const auto& cp = cc.intrinsics.parameters.param;
+    colorIntrinsics_.width  = cc.resolution_width;
+    colorIntrinsics_.height = cc.resolution_height;
+    colorIntrinsics_.fx = cp.fx; colorIntrinsics_.fy = cp.fy;
+    colorIntrinsics_.cx = cp.cx; colorIntrinsics_.cy = cp.cy;
+    colorIntrinsics_.k1 = cp.k1; colorIntrinsics_.k2 = cp.k2; colorIntrinsics_.k3 = cp.k3;
+    colorIntrinsics_.p1 = cp.p1; colorIntrinsics_.p2 = cp.p2;
+
+    // depth-cam space -> color-cam space (k4a translation is in mm -> meters).
+    const k4a_calibration_extrinsics_t& ex =
+        impl_->calibration.extrinsics[K4A_CALIBRATION_TYPE_DEPTH][K4A_CALIBRATION_TYPE_COLOR];
+    Mat4 dc2c;  // row-major affine (identity by default)
+    dc2c.m[0]  = ex.rotation[0]; dc2c.m[1]  = ex.rotation[1]; dc2c.m[2]  = ex.rotation[2];
+    dc2c.m[4]  = ex.rotation[3]; dc2c.m[5]  = ex.rotation[4]; dc2c.m[6]  = ex.rotation[5];
+    dc2c.m[8]  = ex.rotation[6]; dc2c.m[9]  = ex.rotation[7]; dc2c.m[10] = ex.rotation[8];
+    dc2c.m[3]  = ex.translation[0] * 0.001f;
+    dc2c.m[7]  = ex.translation[1] * 0.001f;
+    dc2c.m[11] = ex.translation[2] * 0.001f;
+    depthToColor_ = dc2c;
+
     return true;
 }
 
@@ -136,29 +158,26 @@ StreamFreshness AzureKinect::captureInto(DepthFrame& dst) {
             k4a_image_release(xyzImg);
         }
 
-        // Color registered into the depth geometry.
+        // Native full-resolution color (NOT registered to depth). The depth->
+        // color mapping is computed on demand by the base from colorIntrinsics +
+        // depthToColor, so we keep the color at its own resolution.
         k4a_image_t colorImg = k4a_capture_get_color_image(cap);
         if (colorImg) {
-            k4a_image_t colorInDepth = nullptr;
-            if (k4a_image_create(K4A_IMAGE_FORMAT_COLOR_BGRA32, w, h, w * 4,
-                                 &colorInDepth) == K4A_RESULT_SUCCEEDED) {
-                if (k4a_transformation_color_image_to_depth_camera(
-                        impl_->transformation, depthImg, colorImg,
-                        colorInDepth) == K4A_RESULT_SUCCEEDED) {
-                    dst.color.allocate(w, h, 4);  // RGBA
-                    const uint8_t* cb = k4a_image_get_buffer(colorInDepth);
-                    uint8_t* out = dst.color.getData();
-                    const size_t n = static_cast<size_t>(w) * h;
-                    for (size_t i = 0; i < n; ++i) {
-                        out[i * 4 + 0] = cb[i * 4 + 2];  // R <- B
-                        out[i * 4 + 1] = cb[i * 4 + 1];  // G
-                        out[i * 4 + 2] = cb[i * 4 + 0];  // B <- R
-                        out[i * 4 + 3] = cb[i * 4 + 3];  // A
-                    }
-                    fresh.color = true;
-                }
-                k4a_image_release(colorInDepth);
+            const int cw = k4a_image_get_width_pixels(colorImg);
+            const int chh = k4a_image_get_height_pixels(colorImg);
+            dst.color.allocate(cw, chh, 4);  // RGBA
+            const uint8_t* cb = k4a_image_get_buffer(colorImg);
+            uint8_t* out = dst.color.getData();
+            const size_t n = static_cast<size_t>(cw) * chh;
+            for (size_t i = 0; i < n; ++i) {
+                out[i * 4 + 0] = cb[i * 4 + 2];  // R <- B
+                out[i * 4 + 1] = cb[i * 4 + 1];  // G
+                out[i * 4 + 2] = cb[i * 4 + 0];  // B <- R
+                out[i * 4 + 3] = cb[i * 4 + 3];  // A
             }
+            dst.colorIntrinsics = colorIntrinsics_;
+            dst.depthToColor = depthToColor_;
+            fresh.color = true;
             k4a_image_release(colorImg);
         }
 

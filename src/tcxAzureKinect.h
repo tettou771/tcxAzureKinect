@@ -49,6 +49,8 @@ private:
     std::unique_ptr<Impl> impl_;
     uint32_t deviceIndex_;
     DepthIntrinsics depthIntrinsics_{};  // cached from calibration in openDevice
+    DepthIntrinsics colorIntrinsics_{};  // color camera intrinsics (native res)
+    Mat4 depthToColor_{};                // depth-cam space -> color-cam space
 };
 
 } // namespace tcx

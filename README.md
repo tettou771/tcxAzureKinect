@@ -48,10 +48,12 @@ const DepthFrame& f = cam->currentFrame();   // depth / world / color / ir / int
 - **Units:** depth distance and world coordinates are in **meters** (the
   tcxDepthCamera convention). Depth is stored as uint16 mm with
   `depthScale = 0.001`.
-- **Color** is delivered already registered into the depth geometry (via
-  `k4a_transformation_color_image_to_depth_camera`), so per-vertex color and UVs
-  map straight through the depth pixel coordinates. `getColorPixels()` therefore
-  returns a depth-resolution image, not the full 720p color frame.
+- **Color** is kept at its NATIVE full resolution (e.g. 720p) - it is NOT
+  registered/downsampled to the depth geometry. The base computes the depth->
+  color mapping on demand from the color intrinsics + depth->color extrinsic
+  (both cached from the k4a calibration), so `getColorPixels()` returns the full
+  color frame and `getColorTexCoordAt()` / `getColorAt()` project correctly.
+  Use `registerColorToDepth()` if you specifically want a depth-aligned image.
 - **Point cloud** uses the SDK's `depth_image_to_point_cloud` transformation
   (accurate, accounts for lens distortion): the result is written to
   `frame.world`, and the base returns it from `getWorldCoordinateAt()` /
