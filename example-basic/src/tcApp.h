@@ -20,6 +20,7 @@ public:
 
 private:
     void rebuild();
+    void updateThumbnails();   // refresh the 2D color / depth / IR previews
 
     shared_ptr<AzureKinect> camera;
     bool deviceOk = false;
@@ -27,4 +28,7 @@ private:
     Mesh cloud;
     bool colored = true;    // Azure Kinect has color; show it by default
     int step = 2;           // decimate a bit (depth is up to 640x576)
+
+    // 2D previews of the raw streams, drawn lined up in the corner.
+    Image colorImg, depthImg, irImg;
 };
