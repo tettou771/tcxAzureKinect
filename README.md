@@ -5,13 +5,12 @@ implementing the [`tcxDepthCamera`](https://github.com/TrussC-org/TrussC/tree/de
 interface. Drive an Azure Kinect (a time-of-flight depth camera) through the
 same `DepthCamera` API as any other depth sensor.
 
-> **Status: builds on Windows; full runtime verification pending.** Compiles and
-> links with the Azure Kinect Sensor SDK v1.4.1 (MSVC x64), and `example-basic`
-> launches against a connected device — the k4a depth capture path produced
-> frames at the SDK level. A clean end-to-end check (rendered point cloud,
-> color, IR) is still pending (the first run was during a device firmware
-> update). Linux build wiring is present but not exercised. k4a has no macOS
-> support. See `example-basic/`.
+> **Status: working on Windows (hardware-verified).** Builds and links with the
+> Azure Kinect Sensor SDK v1.4.1 (MSVC x64); `example-basic` runs against a
+> connected device and renders a live colored point cloud — depth, color, and IR
+> are all confirmed end-to-end. The example also shows color / depth / IR
+> previews and orbits around the camera origin. Linux build wiring is present but
+> not yet exercised. k4a has no macOS support. See `example-basic/`.
 
 ## Requirements
 

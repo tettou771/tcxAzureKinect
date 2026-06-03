@@ -1,12 +1,10 @@
 # tcxAzureKinect — Known issues & roadmap
 
-Status: **builds on Windows; full runtime verification pending.** Compiles and
-links with the Azure Kinect Sensor SDK v1.4.1 (MSVC x64). `example-basic`
-launches against a connected device and the k4a depth capture path produced
-frames at the SDK level, but a clean end-to-end run (rendered point cloud,
-color, IR) has not been confirmed yet — the first attempt was during a device
-firmware update, and only depth captures were observed (with `capturesync`
-queue-drop warnings). The items below are the outstanding work and caveats.
+Status: **working on Windows (hardware-verified).** Compiles and links with the
+Azure Kinect Sensor SDK v1.4.1 (MSVC x64). `example-basic` runs end-to-end
+against a connected device: a rendered colored point cloud plus color / depth /
+IR — all confirmed (see Verification below). The items below are the outstanding
+work and caveats.
 
 ## Functional limitations
 
@@ -34,12 +32,12 @@ queue-drop warnings). The items below are the outstanding work and caveats.
 
 ## Verification
 
-5. **Full hardware verification pending.** So far: compiles + links, DLLs
-   bundled, and the example reaches the device (SDK-level depth captures seen).
-   Still to confirm with a healthy (non-updating) device: a correctly rendered
-   point cloud, color registration, and the IR image — plus resolving the
-   `capturesync` full-queue drops seen on the first run (likely just the
-   consumer not pulling fast enough, or the firmware-update state).
+5. **Full hardware verification — done (2026-06-03).** Verified on Windows
+   (VS2026, SDK v1.4.1) against a connected device: a steady colored point cloud
+   (~25k points/frame) with `hasColor()` and `hasInfrared()` both true, and the
+   color / depth / IR previews rendering correctly. The `capturesync` full-queue
+   drops seen on the very first run did not recur on a healthy (non-updating)
+   device.
 
 ## Platforms & devices
 
