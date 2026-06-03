@@ -5,14 +5,28 @@ implementing the [`tcxDepthCamera`](https://github.com/TrussC-org/TrussC/tree/de
 interface. Drive an Azure Kinect (a time-of-flight depth camera) through the
 same `DepthCamera` API as any other depth sensor.
 
-> 🚧 **Status: first pass, not yet hardware-tested.** The k4a wiring was written
-> against the SDK API but has not been compiled/run against a device yet (k4a
-> has no macOS support; first build target is Linux). Expect refinement.
+> **Status: builds on Windows; full runtime verification pending.** Compiles and
+> links with the Azure Kinect Sensor SDK v1.4.1 (MSVC x64), and `example-basic`
+> launches against a connected device — the k4a depth capture path produced
+> frames at the SDK level. A clean end-to-end check (rendered point cloud,
+> color, IR) is still pending (the first run was during a device firmware
+> update). Linux build wiring is present but not exercised. k4a has no macOS
+> support. See `example-basic/`.
 
 ## Requirements
 
-- **Azure Kinect Sensor SDK (k4a)** installed (provides the `k4a::k4a` CMake
-  target). Officially supported on **Linux and Windows only** — not macOS.
+- **Azure Kinect Sensor SDK (k4a)** installed. Officially supported on **Linux
+  and Windows only** — not macOS.
+  - **Windows:** install the SDK MSI from
+    [Microsoft](https://learn.microsoft.com/azure/kinect-dk/sensor-sdk-download).
+    It installs to `C:\Program Files\Azure Kinect SDK vX.Y.Z` but does **not**
+    ship a CMake config, so this addon's `CMakeLists.txt` locates the headers +
+    `k4a.lib` under that path automatically (override with
+    `-DK4A_SDK_ROOT="…/sdk"` if installed elsewhere). The runtime DLLs
+    (`k4a.dll` + `depthengine_*.dll`) are copied next to the app executable at
+    build time — no manual PATH setup needed.
+  - **Linux:** install `libk4a<ver>-dev` (provides a `k4a` CMake package /
+    `libk4a`), which is found via `find_package(k4a)`.
 - The `tcxDepthCamera` addon (this addon depends on it).
 
 ## Usage

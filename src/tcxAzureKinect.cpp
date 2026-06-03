@@ -2,10 +2,11 @@
 // tcxAzureKinect.cpp - Azure Kinect DK backend implementation (k4a)
 // =============================================================================
 //
-// NOTE: First pass written against the k4a API; NOT yet compiled or run against
-// the SDK / hardware (developed on macOS, which k4a does not support). Build /
-// refine on Linux with the Azure Kinect Sensor SDK installed. The tcxDepthCamera
-// plumbing it fills is the validated part.
+// Compiles and links against the Azure Kinect Sensor SDK v1.4.1 (MSVC x64) on
+// Windows; full hardware verification (point cloud / color / IR end-to-end) is
+// still pending. k4a does not support macOS. The config (NFOV unbinned depth,
+// 720p BGRA color, 30 fps) is still hardcoded; making it configurable is a
+// planned follow-up.
 //
 // =============================================================================
 

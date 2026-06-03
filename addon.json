@@ -13,6 +13,10 @@
     "tof",
     "rgbd"
   ],
+  "platforms": [
+    "windows",
+    "linux"
+  ],
   "dependencies": [
     "tcxDepthCamera"
   ]
