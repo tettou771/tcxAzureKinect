@@ -33,6 +33,12 @@ AzureKinect::AzureKinect(uint32_t deviceIndex)
 
 AzureKinect::~AzureKinect() = default;
 
+// Escape hatch: raw k4a handles (see header). Valid only while the device is
+// open; null / empty otherwise. The backend keeps ownership.
+k4a_device_t AzureKinect::getNativeDevice() const { return impl_->device; }
+const k4a_calibration_t& AzureKinect::getNativeCalibration() const { return impl_->calibration; }
+k4a_transformation_t AzureKinect::getNativeTransformation() const { return impl_->transformation; }
+
 // -----------------------------------------------------------------------------
 bool AzureKinect::openDevice() {
     if (k4a_device_open(deviceIndex_, &impl_->device) != K4A_RESULT_SUCCEEDED) {

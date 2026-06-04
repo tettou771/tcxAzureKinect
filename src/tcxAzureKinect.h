@@ -20,11 +20,14 @@
 //   cam->update();
 //   if (cam->isFrameNew()) cam->toMesh({.colors = true}).draw();
 //
-// k4a handles are hidden behind a pImpl so this header stays SDK-free.
+// k4a handles live in a pImpl, but this header includes <k4a/k4a.h> so it can
+// hand back the raw k4a handles (getNativeDevice / Calibration / Transformation)
+// as an escape hatch for SDK features the unified interface doesn't surface.
 //
 // =============================================================================
 
 #include <tcxDepthCamera.h>
+#include <k4a/k4a.h>
 #include <cstdint>
 #include <memory>
 
@@ -38,6 +41,18 @@ public:
     ~AzureKinect() override;
 
     DepthSensorType getSensorType() const override { return DepthSensorType::ToF; }
+
+    // -------------------------------------------------------------------------
+    // Escape hatch: raw k4a handles for SDK features the unified DepthCamera
+    // interface doesn't surface (IMU, body tracking via k4abt, exposure / white
+    // balance control, native transforms, multi-device hardware sync, ...).
+    // Valid only while the device is open: null / empty before setup() and
+    // after closeDevice(). The backend owns their lifetime — do NOT close or
+    // free them yourself.
+    // -------------------------------------------------------------------------
+    k4a_device_t             getNativeDevice() const;
+    const k4a_calibration_t& getNativeCalibration() const;
+    k4a_transformation_t     getNativeTransformation() const;
 
 protected:
     bool openDevice() override;
