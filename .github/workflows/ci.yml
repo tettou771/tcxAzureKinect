@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']   # every branch: no silent skips. Narrow to [main] if CI is too heavy/low-value for this addon.
+    tags: ['v*']
+  pull_request:
+    branches: [main]   # mainly to cover fork PRs into main (your own branches already run via push)
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  # Build example-basic on Windows / Linux (k4a has no macOS support, so macOS is
+  # dropped via addon.json "platforms"). No tests/ dir -> build-only, the right
+  # default for a hardware addon. setup_script installs the Azure Kinect SDK:
+  #   Linux   - Microsoft prod apt repo, EULA pre-accepted via debconf
+  #   Windows - the Microsoft.Azure.Kinect.Sensor NuGet, laid out into a prefix
+  #             that find_package/find_library pick up via CMAKE_PREFIX_PATH
+  build:
+    uses: TrussC-org/ci-actions/.github/workflows/build-addon.yml@main
+    with:
+      # The example uses tcxDepthCamera's preview-Image getters, which currently
+      # live on dev; switch to a pinned tag once they land on main.
+      trussc_ref: dev
+      setup_script: |
+        set -euo pipefail
+        K4A_VER="1.4.1"
+        if [ "$RUNNER_OS" = "Linux" ]; then
+          curl -sSL https://packages.microsoft.com/keys/microsoft.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/ubuntu/18.04/prod bionic main" \
+            | sudo tee /etc/apt/sources.list.d/microsoft-prod.list >/dev/null
+          sudo apt-get update
+          # libk4a's postinst shows a EULA prompt; pre-accept it non-interactively.
+          echo 'libk4a1.4 libk4a1.4/accepted-eula-hash string 0f5d5c5de396e4fee4c0753a21fee0c1ed726cf0316204edda484f08cb266d76' | sudo debconf-set-selections
+          echo 'libk4a1.4 libk4a1.4/accept-eula boolean true' | sudo debconf-set-selections
+          sudo ACCEPT_EULA=Y apt-get install -y libk4a${K4A_VER%.*} libk4a${K4A_VER%.*}-dev
+        elif [ "$RUNNER_OS" = "Windows" ]; then
+          nuget install Microsoft.Azure.Kinect.Sensor -Version "$K4A_VER" -OutputDirectory "$GITHUB_WORKSPACE/k4a-pkg" -ExcludeVersion
+          pkg="$GITHUB_WORKSPACE/k4a-pkg/Microsoft.Azure.Kinect.Sensor"
+          prefix="$GITHUB_WORKSPACE/k4a-prefix"
+          mkdir -p "$prefix/include" "$prefix/lib" "$prefix/bin"
+          # Lay out an MSI-style prefix from the NuGet, regardless of its internal paths.
+          hdr=$(find "$pkg" -name k4a.h -path '*/k4a/*' | head -1)
+          cp -r "$(dirname "$(dirname "$hdr")")/." "$prefix/include/"
+          cp "$(find "$pkg" -name k4a.lib | head -1)" "$prefix/lib/"
+          for dll in $(find "$pkg" -name 'k4a.dll' -o -name 'depthengine_*.dll'); do cp "$dll" "$prefix/bin/"; done
+          echo "CMAKE_PREFIX_PATH=$prefix" >> "$GITHUB_ENV"
+          echo "laid out k4a prefix at $prefix"
+        fi
