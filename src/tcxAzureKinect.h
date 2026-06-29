@@ -54,6 +54,15 @@ public:
     const k4a_calibration_t& getNativeCalibration() const;
     k4a_transformation_t     getNativeTransformation() const;
 
+    // The k4a_capture behind the most recent successful frame, retained until the
+    // next one is grabbed — e.g. to feed k4abt_tracker_enqueue_capture() for body
+    // tracking, sharing the single capture instead of opening the device twice.
+    // Null before the first frame / after closeDevice(); the backend owns it, do
+    // NOT release it. In threaded mode (setThreaded(true)) it is swapped on the
+    // grab thread, so read it on the thread that drives update() — or run
+    // non-threaded when handing it to the body tracker.
+    k4a_capture_t            getNativeCapture() const;
+
 protected:
     bool openDevice() override;
     void closeDevice() override;

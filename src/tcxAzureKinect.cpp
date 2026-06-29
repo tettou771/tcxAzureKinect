@@ -26,6 +26,7 @@ struct AzureKinect::Impl {
     k4a_transformation_t       transformation = nullptr;
     k4a_calibration_t          calibration{};
     k4a_device_configuration_t config{};
+    k4a_capture_t              capture        = nullptr;  // most recent frame, held for getNativeCapture()
 };
 
 AzureKinect::AzureKinect(uint32_t deviceIndex)
@@ -38,6 +39,7 @@ AzureKinect::~AzureKinect() = default;
 k4a_device_t AzureKinect::getNativeDevice() const { return impl_->device; }
 const k4a_calibration_t& AzureKinect::getNativeCalibration() const { return impl_->calibration; }
 k4a_transformation_t AzureKinect::getNativeTransformation() const { return impl_->transformation; }
+k4a_capture_t AzureKinect::getNativeCapture() const { return impl_->capture; }
 
 // -----------------------------------------------------------------------------
 bool AzureKinect::openDevice() {
@@ -105,6 +107,10 @@ bool AzureKinect::openDevice() {
 }
 
 void AzureKinect::closeDevice() {
+    if (impl_->capture) {
+        k4a_capture_release(impl_->capture);
+        impl_->capture = nullptr;
+    }
     if (impl_->transformation) {
         k4a_transformation_destroy(impl_->transformation);
         impl_->transformation = nullptr;
@@ -124,8 +130,13 @@ StreamFreshness AzureKinect::captureInto(DepthFrame& dst) {
     if (k4a_device_get_capture(impl_->device, &cap, kCaptureTimeoutMs)
             != K4A_WAIT_RESULT_SUCCEEDED) {
         if (cap) k4a_capture_release(cap);
-        return fresh;  // timeout / no frame
+        return fresh;  // timeout / no frame; keep the previously held capture
     }
+
+    // Retain this capture for getNativeCapture() (e.g. k4abt body tracking shares
+    // the single capture). Release the one held from the previous frame first.
+    if (impl_->capture) k4a_capture_release(impl_->capture);
+    impl_->capture = cap;
 
     k4a_image_t depthImg = k4a_capture_get_depth_image(cap);
     if (depthImg) {
@@ -206,7 +217,9 @@ StreamFreshness AzureKinect::captureInto(DepthFrame& dst) {
         k4a_image_release(irImg);
     }
 
-    k4a_capture_release(cap);
+    // cap is NOT released here — it is retained as impl_->capture and freed on the
+    // next successful capture or in closeDevice(), so getNativeCapture() can hand
+    // it to k4abt for the current frame.
     return fresh;
 }
 
