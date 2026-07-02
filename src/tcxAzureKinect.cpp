@@ -16,7 +16,7 @@
 
 using namespace std;
 
-namespace tcx {
+namespace tcx::azurekinect {
 
 // Timeout for a synchronized capture before the worker re-checks running (ms).
 static constexpr int32_t kCaptureTimeoutMs = 1000;
@@ -210,4 +210,4 @@ StreamFreshness AzureKinect::captureInto(DepthFrame& dst) {
     return fresh;
 }
 
-} // namespace tcx
+} // namespace tcx::azurekinect

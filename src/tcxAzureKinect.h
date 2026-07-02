@@ -31,11 +31,11 @@
 #include <cstdint>
 #include <memory>
 
-namespace tcx {
+namespace tcx::azurekinect {
 
 using namespace tc;
 
-class AzureKinect : public DepthCamera {
+class AzureKinect : public tcx::depthcamera::DepthCamera {
 public:
     explicit AzureKinect(uint32_t deviceIndex = 0);
     ~AzureKinect() override;
@@ -68,4 +68,14 @@ private:
     Mat4 depthToColor_{};                // depth-cam space -> color-cam space
 };
 
-} // namespace tcx
+} // namespace tcx::azurekinect
+
+// -----------------------------------------------------------------------------
+// Backward compatibility. The canonical namespace is now `tcx::azurekinect`.
+// These silent aliases keep older code compiling: flat `tcx::AzureKinect` and
+// legacy `trussc::AzureKinect`. DEPRECATED — removed in v1.0.0.
+// (No [[deprecated]] attribute: under the usual `using namespace tc;` it would
+//  warn on idiomatic unqualified use too. See tcxAzureKinect README for migration.)
+// -----------------------------------------------------------------------------
+namespace tcx    { using azurekinect::AzureKinect; } // deprecated: remove at v1.0.0
+namespace trussc { using tcx::azurekinect::AzureKinect; } // deprecated: remove at v1.0.0
