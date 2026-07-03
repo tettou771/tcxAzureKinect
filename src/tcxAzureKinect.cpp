@@ -15,6 +15,7 @@
 #include <k4a/k4a.h>
 
 using namespace std;
+using namespace tc;
 
 namespace tcx::azurekinect {
 
@@ -117,8 +118,8 @@ void AzureKinect::closeDevice() {
 }
 
 // -----------------------------------------------------------------------------
-StreamFreshness AzureKinect::captureInto(DepthFrame& dst) {
-    StreamFreshness fresh;
+depthcamera::StreamFreshness AzureKinect::captureInto(depthcamera::DepthFrame& dst) {
+    depthcamera::StreamFreshness fresh;
 
     k4a_capture_t cap = nullptr;
     if (k4a_device_get_capture(impl_->device, &cap, kCaptureTimeoutMs)

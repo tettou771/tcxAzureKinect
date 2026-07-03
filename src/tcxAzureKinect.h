@@ -33,14 +33,12 @@
 
 namespace tcx::azurekinect {
 
-using namespace tc;
-
 class AzureKinect : public tcx::depthcamera::DepthCamera {
 public:
     explicit AzureKinect(uint32_t deviceIndex = 0);
     ~AzureKinect() override;
 
-    DepthSensorType getSensorType() const override { return DepthSensorType::ToF; }
+    depthcamera::DepthSensorType getSensorType() const override { return depthcamera::DepthSensorType::ToF; }
 
     // -------------------------------------------------------------------------
     // Escape hatch: raw k4a handles for SDK features the unified DepthCamera
@@ -57,15 +55,15 @@ public:
 protected:
     bool openDevice() override;
     void closeDevice() override;
-    StreamFreshness captureInto(DepthFrame& dst) override;
+    depthcamera::StreamFreshness captureInto(depthcamera::DepthFrame& dst) override;
 
 private:
     struct Impl;                    // hides k4a handles
     std::unique_ptr<Impl> impl_;
     uint32_t deviceIndex_;
-    DepthIntrinsics depthIntrinsics_{};  // cached from calibration in openDevice
-    DepthIntrinsics colorIntrinsics_{};  // color camera intrinsics (native res)
-    Mat4 depthToColor_{};                // depth-cam space -> color-cam space
+    depthcamera::DepthIntrinsics depthIntrinsics_{};  // cached from calibration in openDevice
+    depthcamera::DepthIntrinsics colorIntrinsics_{};  // color camera intrinsics (native res)
+    tc::Mat4 depthToColor_{};             // depth-cam space -> color-cam space
 };
 
 } // namespace tcx::azurekinect
