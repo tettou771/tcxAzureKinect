@@ -28,6 +28,71 @@ same `DepthCamera` API as any other depth sensor.
     `libk4a`), which is found via `find_package(k4a)`.
 - The `tcxDepthCamera` addon (this addon depends on it).
 
+## Using a Femto Bolt (Orbbec K4A Wrapper)
+
+This addon talks to the **k4a API**, not to a specific device — so it also drives
+an **Orbbec Femto Bolt** (the de-facto Azure Kinect DK successor) without any code
+change. The Femto is *not* a genuine Azure Kinect, so the Microsoft k4a SDK will
+**not** enumerate it; instead install Orbbec's **K4A Wrapper**, a drop-in fork of
+the Azure Kinect Sensor SDK that exposes the same `k4a.h` / `k4a.lib` / `k4a.dll`
+but binds to Orbbec cameras.
+
+> **Do not install the Microsoft k4a SDK as well** — if its `k4a.dll` is picked up
+> instead of the wrapper's, the Femto won't open. Use only the wrapper.
+
+1. **Download** the wrapper (use the **v2** branch for Femto Bolt) from
+   [OrbbecSDK-K4A-Wrapper releases](https://github.com/orbbec/OrbbecSDK-K4A-Wrapper/releases)
+   — the `..._windows_*.zip` (amd64/x64) asset — and extract it somewhere stable,
+   e.g. `C:\SDK\OrbbecK4A`. Supported: Windows 10+, Linux x64, Linux ARM64 (Jetson).
+   Requires **Femto Bolt firmware ≥ 1.1.2** (recommended 1.1.3).
+2. **(Windows) Register UVC metadata** — run `scripts\obsensor_metadata_win10.ps1`
+   once from an **admin** PowerShell. Without it the color stream may not appear.
+3. **Verify the hardware first**, independent of TrussC: run the bundled
+   `bin\k4aviewer.exe`. If you see live depth / color, the camera + wrapper +
+   driver are all good. (Orbbec's own guide: `doc\Access_AKDK_Application_Software_with_Femto_Bolt.pdf`.)
+4. **Point the build at the wrapper.** Unlike the Microsoft MSI, the wrapper zip
+   *does* ship a CMake config (`lib\cmake\k4a\k4aConfig.cmake`), so this addon's
+   `find_package(k4a CONFIG)` finds it directly — just expose its location via
+   `CMAKE_PREFIX_PATH`. Point it at the wrapper **root** (the folder that contains
+   `bin\`, `include\`, `lib\`), not the `lib\cmake\k4a` subfolder.
+
+   ```powershell
+   # Current shell only (one-off):
+   $env:CMAKE_PREFIX_PATH = "C:\SDK\OrbbecK4A"
+   ```
+
+   To persist it for all future shells, set the **User** environment variable.
+   `setx` works but *overwrites* (and truncates at 1024 chars), so if you already
+   use `CMAKE_PREFIX_PATH` for something else, append safely instead:
+
+   ```powershell
+   # Append to the existing User value without clobbering it (no-op if present):
+   $add = "C:\SDK\OrbbecK4A"
+   $old = [Environment]::GetEnvironmentVariable("CMAKE_PREFIX_PATH", "User")
+   if (-not $old)                            { $new = $add }
+   elseif (($old -split ';') -contains $add) { $new = $old }
+   else                                      { $new = "$old;$add" }
+   [Environment]::SetEnvironmentVariable("CMAKE_PREFIX_PATH", $new, "User")
+   ```
+
+   This persists like `setx` but only touches the User scope and won't duplicate.
+   Either way it applies to **new** shells only — reopen your terminal (or set
+   `$env:CMAKE_PREFIX_PATH` in the current one too).
+
+   > If the build was already configured once before this was set, clear the
+   > build dir so CMake reconfigures from scratch: `trusscli clean`.
+
+5. **Copy the runtime DLLs next to the app executable.** The automatic DLL
+   bundling only runs on the manual Microsoft-MSI path; when k4a is found via
+   `find_package(k4a CONFIG)` (the wrapper case) it is skipped, so copy the
+   wrapper's **entire `bin\`** — the DLLs (`k4a.dll`, `depthengine_2_0.dll`,
+   `OrbbecSDK.dll`, `k4arecord.dll`) **and the `extensions\` folder** — next to the
+   built `example-basic` executable. Missing `extensions\` / `OrbbecSDK.dll` makes
+   the device fail to start at runtime.
+
+Everything else below (API, units, point cloud, etc.) is identical to a real
+Azure Kinect.
+
 ## Usage
 
 ```cpp
