@@ -32,7 +32,11 @@ struct AzureKinect::Impl {
 AzureKinect::AzureKinect(uint32_t deviceIndex)
     : impl_(make_unique<Impl>()), deviceIndex_(deviceIndex) {}
 
-AzureKinect::~AzureKinect() = default;
+// Stop the grabber thread while this backend's members are still alive
+// (tcxDepthCamera: each backend destructor must call close()).
+AzureKinect::~AzureKinect() {
+    close();
+}
 
 // Escape hatch: raw k4a handles (see header). Valid only while the device is
 // open; null / empty otherwise. The backend keeps ownership.
